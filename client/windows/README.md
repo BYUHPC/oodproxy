@@ -31,13 +31,17 @@ The Inno Setup Compiler script used to build the Windows installer. Use this wit
 - PowerShell 5.1 or later
 - Stunnel for Windows https://www.stunnel.org/downloads.html
 
+## Using the launcher
+To establish a connection to a Windows VM, start a relevant Open OnDemand job, then on the job card in "My Interactive Sessons" click "RDP".  The browser will download the necessary config file and the launcher will run a PowerShell script that handles the rest of the session for you.  It will start stunnel and launch mstsc.exe with all of the appropriate parameters.  When the RDP window is closed, the PowerShell script will close stunnel and exit.
+
+### Troubleshooting
+- If the connection fails, verify that Stunnel is correctly installed
+- For installation issues, check the Windows Event Log for PowerShell execution errors
+- The application looks for Stunnel in standard installation locations and PATH
+
 ## For Developers
 If you need to make changes to any components:
 1. Modify the necessary files (`installer.iss`, `ood_proxy.ps1`, or `setup.ps1`)
 2. Rebuild the installer using Inno Setup Compiler 6.4.0 or later
 3. Test the new installer thoroughly before distribution
 
-## Troubleshooting
-- If the connection fails, verify that Stunnel is correctly installed
-- For installation issues, check the Windows Event Log for PowerShell execution errors
-- The application looks for Stunnel in standard installation locations and PATH
