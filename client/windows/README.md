@@ -1,4 +1,4 @@
-# OOD Proxy BYU Client
+# OOD Proxy BYU Client for Microsoft Windows
 
 ## Overview
 This application provides a secure connection tunnel for Remote Desktop Protocol (RDP) sessions through Open OnDemand at BYU. It uses Stunnel to create a TLS encrypted tunnel to the remote proxy server.
