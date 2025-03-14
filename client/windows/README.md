@@ -6,7 +6,7 @@ This application provides a secure connection tunnel for Remote Desktop Protocol
 ## Files in this Package
 
 ### `ood_proxy_byu_setup.exe`
-The Windows installer for end users. This installs the client application and sets up file associations for `.oodproxybyu` files. Distribute this file to users who need to connect to systems through Open OnDemand.
+The Windows installer for end users. This installs the client application and sets up file associations for `.oodproxybyu` files. Distribute this file to users who need to connect to systems through Open OnDemand.  This installer contains everything needed for installation.  The rest of the files here are the source code used to create the Windows installer.
 
 ### `ood_proxy.ps1`
 The main PowerShell script that:
