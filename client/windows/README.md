@@ -29,7 +29,7 @@ The Inno Setup Compiler script used to build the Windows installer. Use this wit
 ## Prerequisites
 - Windows 10 or later
 - PowerShell 5.1 or later
-- Stunnel (automatically checked during installation)
+- Stunnel for Windows https://www.stunnel.org/downloads.html
 
 ## For Developers
 If you need to make changes to any components:
