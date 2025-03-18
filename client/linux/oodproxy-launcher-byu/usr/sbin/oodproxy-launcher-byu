@@ -1,0 +1,326 @@
+#!/bin/bash -e
+
+CONFIG_DIR="$HOME/.local/oodproxy-launcher"
+HOTKEY_DIR="$CONFIG_DIR/hotkeyreminders"
+HOTKEY_REMINDER_MAX=3
+
+function popup_message {
+	local prog="$1"
+	local message="$2"
+	local count=0
+
+	if [ -e "$HOTKEY_DIR/$prog" ]
+	then
+		count=$(<"$HOTKEY_DIR/$prog")
+		((count >= $HOTKEY_REMINDER_MAX)) && return
+	else
+		[ -d "$HOTKEY_DIR" ] || mkdir -p "$HOTKEY_DIR"
+	fi
+
+	set +e
+	#yad and notify-send have not been tested so I'll have to take an LLM's word for it (or Google it... someday)
+	if command -v zenity >/dev/null; then
+		zenity --info --text="$message"
+	elif command -v kdialog >/dev/null; then
+		kdialog --msgbox "$message"
+	elif command -v yad >/dev/null; then
+		yad --text="$message" --button=OK
+	elif command -v xterm; then
+		xterm -fa 'Monospace' -fs 24 -geometry 80x10 -title "" -e "bash -cf \"echo -e \\\"\\n\\n$message\\n\\nPress ENTER to continue\\\"; head -1 > /dev/null; exit 0\""
+	elif command -v notify-send >/dev/null; then
+		notify-send "Info" "$message" &
+		sleep 3
+	elif command -v xmessage >/dev/null; then
+		xmessage -buttons OK -nearmouse "$message"
+	else
+		echo "$message" >&2
+	fi
+
+	((count++))
+	echo $count > "$HOTKEY_DIR/$prog"
+	set -e
+}
+
+if [ -z "$1" ]; then
+	echo "Usage: $0 <filename>" >&2
+	exit 1
+fi
+
+if [ ! -r "$1" ]; then
+	echo "Error: File $1 does not exist or is not readable" >&2
+	exit 1
+fi
+
+PROTO=""
+PROGRAM=""
+USERNAME=""
+PASSWORD=""
+REMOTE_PROXY=""
+CRT_BASE64=""
+KEY_BASE64=""
+CACRT_BASE64=""
+JOB=""
+FULLSCREEN="false"
+
+while IFS= read -r line; do
+	case "$line" in 
+		PROTO=*)
+			PROTO=${line#[^=]*=}
+			;;
+		PROGRAM=*)
+			PROGRAM=${line#[^=]*=}
+			;;
+		USERNAME=*)
+			USERNAME=${line#[^=]*=}
+			;;
+		PASSWORD=*)
+			PASSWORD=${line#[^=]*=}
+			;;
+		REMOTE_PROXY=*)
+			REMOTE_PROXY=${line#[^=]*=}
+			;;
+		CRT_BASE64=*)
+			CRT_BASE64=${line#[^=]*=}
+			;;
+		KEY_BASE64=*)
+			KEY_BASE64=${line#[^=]*=}
+			;;
+		CACRT_BASE64=*)
+			CACRT_BASE64=${line#[^=]*=}
+			;;
+		CA_CN=*)
+			CA_CN=${line#[^=]*=}
+			;;
+		JOB=*)
+			JOB=${line#[^=]*=}
+			;;
+		FULLSCREEN=*)
+			FULLSCREEN=${line#[^=]*=}
+			;;
+	esac
+done < "$1"
+
+if [ -z "$PROTO" ] || [ -z "$PASSWORD" ] || [ -z "$REMOTE_PROXY" ] || \
+   [ -z "$CRT_BASE64" ] || [ -z "$KEY_BASE64" ] || [ -z "$CACRT_BASE64" ]; then
+	echo "Error: Not all required fields were found in the file" >&2
+	exit 1
+fi
+
+mkdir -m 0700 -p "$CONFIG_DIR"
+
+#why not use mktemp? Because it doesn't work for sockets and fifos.  Instead, you're guaranteed to only have one of them exist at a time.  If it doesn't create properly, it doesn't work.  End of story.  At least, that's my reading of the manpages.
+if ! randstr=$(uuidgen 2>/dev/null)
+then
+	randstr="$$-$(date +%s-%N)-$RANDOM"
+fi
+
+SOCAT_REMOTE=""
+if [[ "$PROTO" == "vnc" ]]
+then
+	sock="${TMPDIR:-/tmp}/oodproxy-$randstr.sock"
+	socat -d UNIX-LISTEN:"$sock",umask=0077 OPENSSL:$REMOTE_PROXY,commonname="$CA_CN",certificate=<(base64 -d <<<$CRT_BASE64),key=<(base64 -d <<<$KEY_BASE64),cafile=<(base64 -d <<<$CACRT_BASE64),nodelay,verify=1 &
+
+	popup_message "$PROGRAM" "Press F8 to toggle fullscreen and other configuration options"
+
+	for ((i=0; i < 300; i++))
+	do
+		[ -e "$sock" ] && break
+		sleep .01
+	done
+
+	fullscreen=0
+	if [[ "$FULLSCREEN" == "true" ]]
+	then
+		fullscreen=1
+	fi
+
+	xtigervncviewer \
+	  "$sock" \
+	  -DotWhenNoCursor=0 \
+	  -AutoSelect=1 \
+	  -FullColor=1 \
+	  -CustomCompressLevel=0 \
+	  -CompressLevel=2 \
+	  -NoJPEG=0 \
+	  -QualityLevel=8 \
+	  -FullScreen=$fullscreen \
+	  -RemoteResize=1 \
+	  -ViewOnly=0 \
+	  -Shared=1 \
+	  -AcceptClipboard=1 \
+	  -SendClipboard=1 \
+	  -SendPrimary=1 \
+	  -SetPrimary=1 \
+	  -MenuKey=F8 \
+	  -FullscreenSystemKeys=1 \
+	  -PasswordFile=<(tigervncpasswd -f <<< "$PASSWORD") \
+	  -SecurityTypes=VncAuth
+elif [[ "$PROTO" == "rdp" ]]
+then
+	localport=$(shuf -i $(</proc/sys/net/ipv4/ip_unprivileged_port_start)-65535 -n 1)
+	while true
+	do
+		num=$(head -c3 /dev/urandom | od -An -tu4)
+		if ((num != 0 && num != 1 && num != 16777215)); then
+			localip=$(
+				printf "127.%d.%d.%d\n" \
+				$((num >> 16)) \
+				$(((num >> 8) & 255)) \
+				$((num & 255))
+			)
+			break
+		fi
+	done
+
+	socat -d TCP4-LISTEN:$localport,bind=$localip,reuseaddr,nodelay,accept-timeout=30 OPENSSL:$REMOTE_PROXY,commonname="$CA_CN",certificate=<(base64 -d <<<$CRT_BASE64),key=<(base64 -d <<<$KEY_BASE64),cafile=<(base64 -d <<<$CACRT_BASE64),nodelay,connect-timeout=30,verify=0 &
+
+	socat_pid=$!
+
+	popup_message "$PROGRAM" "Press Ctrl+Alt+Enter to toggle fullscreen"
+
+	echo about to check for tcp listener
+	# Wait for socat to start listening since we backgrounded it
+	for ((i=0; i < 50; i++))
+	do
+		for fdpath in /proc/$socat_pid/fd/*
+		do
+			[[ "${fdpath##*/}" > 2 ]] || continue
+			inode=$(stat -Lc %i "$fdpath")
+			awk "BEGIN { rc=1; } \$10 == $inode { rc = 0; exit(0); } END { exit(rc); }" /proc/net/tcp{,6} && break 2
+		done
+		sleep 0.05
+	done
+
+	echo about to execute "$PROGRAM"
+	if [[ "$PROGRAM" == "freerdp" ]]
+	then
+		freerdp_commands="xfreerdp3 xfreerdp2 xfreerdp"
+		for cmd in $freerdp_commands false
+		do
+			if command -v $cmd >/dev/null; then
+				break
+			fi
+		done
+
+		if [[ "$cmd" == "false" ]]
+		then
+			popup_message error "No known freerdp implementation seems to be installed out of: $freerdp_commands"
+			sleep 5
+			exit 1
+		fi
+
+		fullscreen=""
+		if [[ "$FULLSCREEN" == "true" ]]
+			then
+			fullscreen="+f"
+		fi
+
+		$cmd /t:"Job $JOB (RDP)" /u:"$USERNAME" /p:"$PASSWORD" /v:$localip:$localport /cert:ignore +toggle-fullscreen /dynamic-resolution $fullscreen
+	else
+		# remmina does not like using files without a .remmina extension
+		tmpfile=$(mktemp --suffix=.remmina)
+		cat > "$tmpfile" <<EOF
+[remmina]
+audio-output=
+base-cred-for-gw=0
+cert_ignore=1
+clientbuild=
+clientname=
+colordepth=99
+console=0
+disableautoreconnect=0
+disableclipboard=0
+disable_fastpath=0
+disablepasswordstoring=1
+disable-smooth-scrolling=0
+domain=
+drive=
+dvc=
+enable-autostart=0
+exec=
+execpath=
+freerdp_log_filters=
+freerdp_log_level=INFO
+gateway_domain=
+gateway_password=
+gateway_server=
+gateway_usage=0
+gateway_username=
+glyph-cache=0
+group=
+gwtransp=http
+ignore-tls-errors=1
+keyboard_grab=1
+keymap=
+labels=
+left-handed=0
+loadbalanceinfo=
+microphone=
+monitorids=
+multimon=0
+multitransport=0
+name=Job $JOB (RDP)
+network=none
+no-suppress=0
+notes_text=
+old-license=0
+parallelname=
+parallelpath=
+password=$PASSWORD
+postcommand=
+precommand=
+preferipv6=0
+printer_overrides=
+profile-lock=0
+protocol=RDP
+pth=
+quality=0
+rdp2tcp=
+rdp_reconnect_attempts=
+relax-order-checks=0
+resolution_height=0
+resolution_mode=1
+resolution_width=0
+restricted-admin=0
+scale=2
+security=
+serialdriver=
+serialname=
+serialpath=
+serialpermissive=0
+server=$localip:$localport
+shareparallel=0
+shareprinter=0
+shareserial=0
+sharesmartcard=0
+smartcardname=
+sound=local
+span=0
+ssh_tunnel_auth=0
+ssh_tunnel_certfile=
+ssh_tunnel_enabled=0
+ssh_tunnel_loopback=0
+ssh_tunnel_passphrase=
+ssh_tunnel_password=
+ssh_tunnel_privatekey=
+ssh_tunnel_server=
+ssh_tunnel_username=
+timeout=
+tls-seclevel=
+usb=
+useproxyenv=0
+username=$USERNAME
+vc=
+viewmode=1
+websockets=0
+window_height=1000
+window_maximize=1
+window_width=1800
+EOF
+
+	G_MESSAGES_DEBUG=remmina remmina -c "$tmpfile"
+	set +m
+	(sleep 20; rm -f -- "$tmpfile") &
+	fi
+
+fi

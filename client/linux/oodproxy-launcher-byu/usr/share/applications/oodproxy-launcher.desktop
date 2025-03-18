@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Name=OOD Proxy Launcher - BYU
+Exec=/usr/sbin/oodproxy-launcher-byu %f
+MimeType=application/vnd.openondemand.oodproxy.byu;
+Terminal=false
+Type=Application
+NoDisplay=false

@@ -1,0 +1,5 @@
+#!/bin/bash -x
+
+VERSION=$(grep '^Version:' oodproxy-launcher-byu/DEBIAN/control | cut -d' ' -f2)
+ARCH=$(grep '^Architecture:' oodproxy-launcher-byu/DEBIAN/control | cut -d' ' -f2)
+dpkg-deb --root-owner-group --build oodproxy-launcher-byu oodproxy-launcher-byu_${VERSION}_${ARCH}.deb

@@ -1,0 +1,10 @@
+Package: oodproxy-launcher-byu
+Version: 0.0.9
+Section: misc
+Priority: optional
+Architecture: all
+Depends: socat, gpg, tigervnc-viewer, tigervnc-tools | tigervnc-common, freerdp3-x11 | freerdp3-wayland | freerdp3-sdl | freerdp2-x11 | freerdp2-wayland | remmina
+Recommends: tigervnc-viewer, tigervnc-tools, remmina, freerdp3-x11 | freerdp3-wayland
+Maintainer: Ryan Cox <ryan_cox@byu.edu>
+Description: OOD Proxy Launcher - BYU
+ Launcher and mime type handler for BYU's Open OnDemand proxy.

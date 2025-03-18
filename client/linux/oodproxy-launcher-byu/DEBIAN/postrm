@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+# Update desktop database
+update-desktop-database /usr/share/applications
+
+# Update mime database
+update-mime-database /usr/share/mime
+
+exit 0
