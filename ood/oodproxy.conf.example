@@ -1,0 +1,16 @@
+Alias "/oodproxy" "/apps/ondemand/www/oodproxy"
+<Directory "/apps/ondemand/www/oodproxy">
+    Options FollowSymLinks
+    AllowOverride None
+    Require all granted
+</Directory>
+
+<Location "/oodproxy">
+    AddHandler application/x-httpd-php .php
+
+    AuthType Basic
+    AuthName "Open OnDemand"
+    AuthBasicProvider PAM
+    AuthPamService ood
+    Require valid-user
+</Location>
