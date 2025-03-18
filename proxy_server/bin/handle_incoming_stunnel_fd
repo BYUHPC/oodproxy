@@ -1,0 +1,171 @@
+#!/bin/bash
+
+# Author: Ryan Cox
+#
+# Copyright (C) 2025, Brigham Young University
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see
+# <https://www.gnu.org/licenses/>.
+
+TO_JOB_CERTS_BASE_DIR="/oodproxy/jobs"
+FROM_REMOTE_CERTS_BASE_DIR="/oodproxy/remotes"
+
+progname=$(basename "$0")
+
+function faillog {
+	logger -p local0.warning -t "$progname" "$REMOTE_HOST:$REMOTE_PORT $1 ($SSL_CLIENT_DN)"
+	echo "$1"
+}
+
+SUBJECT_DC=""
+SUBJECT_CN=""
+
+#set -x
+IFS=',' read -ra DN_PARTS <<< "${SSL_CLIENT_DN//, /,}"
+
+# Iterate through parts
+for part in "${DN_PARTS[@]}"; do
+    # Trim leading/trailing whitespace
+#    part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    # Split each part into key and value
+    key="${part%%=*}"
+    value="${part#*=}"
+
+    # Set variables based on key
+    case "$key" in
+        "DC")
+            # Append DC values with dots if SUBJECT_DC is not empty
+            if [ -z "$SUBJECT_DC" ]; then
+		    SUBJECT_DC=$(base64 -d <<< "$value")
+            else
+                SUBJECT_DC="$(base64 -d <<< "$value"),$SUBJECT_DC"
+            fi
+            ;;
+        "CN")
+            SUBJECT_CN="$value"
+            ;;
+    esac
+done
+
+connect=""
+proxytype="mtls"
+uid=""
+proxyuser=""
+proxypassword=""
+job=""
+
+uid=$(cut -d@ -f1 <<< "$SUBJECT_DC")
+job=$(cut -d@ -f2 <<< "$SUBJECT_DC")
+
+if [ -z "$SUBJECT_CN" ]
+then
+	faillog "CN empty"
+	exit 1
+fi
+
+if [[ ! $uid =~ ^[0-9]+$ ]]
+then
+	faillog "UID has non-digits"
+	exit 1
+fi
+
+if [[ ! $job =~ ^[0-9]+$ ]]
+then
+	faillog "JOB has non-digits"
+	exit 1
+fi
+
+certs_dir="$TO_JOB_CERTS_BASE_DIR/$uid/$job"
+remote_dir="$FROM_REMOTE_CERTS_BASE_DIR/$uid/$SUBJECT_CN"
+
+if [ ! -d "$certs_dir" ]
+then
+	faillog "Can't find cert dir '$certs_dir'"
+	exit 1
+fi
+
+if [ ! -e "$remote_dir/connection.conf" ]
+then
+	faillog "Can't find connection.conf"
+	exit 1
+fi
+
+source "$remote_dir/connection.conf"
+if [ -z "$CONNECT" ]
+then
+	faillog "CONNECT not set in connection.conf"
+	exit 1
+fi
+
+setpriv=""
+#if [ -n "$uid" ]
+#then
+#	setpriv="setpriv --reuid "$uid" --init-groups"
+#fi
+
+if ! mkdir "$remote_dir/used" >/dev/null 2>&1
+then
+	faillog "Certificate reuse. Click the link again."
+	exit 1
+fi
+
+(
+	# We need to clean up but can't do so immediately since socat still needs the files.
+	# We can't clean up after socat runs because we need to call socat with exec.
+        # We could instead open file descriptors to the files then pass them to socat rather than pass the file paths.
+	# That would allow us to then immediately delete the files.
+	# However, if this is on NFS it will create .nfs files that prevent rmdir from completing.
+	# So we would then have to background something to do the rmdir after the .nfs files go away.
+	# Or we could just background all of it and call it good. Ugly, but :shrug:
+
+	sleep 20
+	rm -f -- "$remote_dir"/* 2>/dev/null
+	rmdir "$remote_dir/used"
+	rmdir "$remote_dir"
+) </dev/null >/dev/null 2>&1 &
+
+#Expiration is in UTC
+now=$(date --utc +%s)
+expires_utc=$(<"$remote_dir"/expires_utc)
+
+if [ -z "$expires_utc" ]
+then
+	faillog "Unable to find expiration."
+	exit 1
+fi
+
+if (( now > expires_utc ))
+then
+	faillog "Certificate expired."
+	exit 1
+fi
+
+
+logger -p local0.info -t "$progname" "$REMOTE_HOST:$REMOTE_PORT Launching $PROXYTYPE proxy to $CONNECT ($SSL_CLIENT_DN)"
+
+# $PROXYTYPE should be set in $remote_dir/connection.conf, along with $CONNECT
+if [[ "$PROXYTYPE" == "mtls" ]]
+then
+	jobcn=$(openssl x509 -in "$certs_dir/server.crt" -subject -noout | sed -e 's/ *//g' | cut -d= -f3)
+	logger -p local0.info -t "$progname" "DEBUG: socat FD:0 \"OPENSSL:$CONNECT,verify=1,cafile=$certs_dir/ca.crt,certificate=$certs_dir/client.crt,key=$certs_dir/client.key,nodelay,commonname=$jobcn\" ($SSL_CLIENT_DN)"
+	exec $setpriv socat FD:0 "OPENSSL:$CONNECT,verify=1,cafile=$certs_dir/ca.crt,certificate=$certs_dir/client.crt,key=$certs_dir/client.key,nodelay,commonname=$jobcn"
+elif [[ "$PROXYTYPE" == "tcp" ]]
+then
+	exec $setpriv socat FD:0 "TCP:$CONNECT,nodelay"
+else
+	faillog "Unknown or unset PROXYTYPE $PROXYTYPE"
+	exit 1
+fi
+exit 2

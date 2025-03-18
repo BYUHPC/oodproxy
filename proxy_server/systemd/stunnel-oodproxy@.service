@@ -1,0 +1,17 @@
+[Unit]
+Description=OOD Proxy stunnel (%i)
+After=syslog.target network-online.target
+Requires=stunnel-oodproxy.socket
+
+[Service]
+LimitNOFILE=20480
+ExecStart=/usr/bin/stunnel /admin/oodproxy/config/stunnel.conf
+Type=simple
+PrivateTmp=true
+KillMode=process
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

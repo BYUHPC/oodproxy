@@ -1,0 +1,14 @@
+[Unit]
+Description=OOD Proxy stunnel socket
+
+[Socket]
+ListenStream=8443
+Accept=yes
+NoDelay=true
+KillMode=none
+DeferAcceptSec=5
+CollectMode=inactive-or-failed
+
+[Install]
+WantedBy=sockets.target
+
