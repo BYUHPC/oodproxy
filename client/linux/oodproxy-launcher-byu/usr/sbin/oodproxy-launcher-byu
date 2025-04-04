@@ -172,7 +172,7 @@ then
 		fi
 	done
 
-	socat -d TCP4-LISTEN:$localport,bind=$localip,reuseaddr,nodelay,accept-timeout=30 OPENSSL:$REMOTE_PROXY,commonname="$CA_CN",certificate=<(base64 -d <<<$CRT_BASE64),key=<(base64 -d <<<$KEY_BASE64),cafile=<(base64 -d <<<$CACRT_BASE64),nodelay,connect-timeout=30,verify=0 &
+	socat -d TCP4-LISTEN:$localport,bind=$localip,reuseaddr,nodelay,accept-timeout=30 OPENSSL:$REMOTE_PROXY,commonname="$CA_CN",certificate=<(base64 -d <<<$CRT_BASE64),key=<(base64 -d <<<$KEY_BASE64),cafile=<(base64 -d <<<$CACRT_BASE64),nodelay,connect-timeout=30,verify=1 &
 
 	socat_pid=$!
 
@@ -215,7 +215,7 @@ then
 			fullscreen="+f"
 		fi
 
-		$cmd /t:"Job $JOB (RDP)" /u:"$USERNAME" /p:"$PASSWORD" /v:$localip:$localport /cert:ignore +toggle-fullscreen /dynamic-resolution $fullscreen
+		$cmd /t:"Job $JOB (RDP)" /u:"$USERNAME" /p:"$PASSWORD" /v:$localip:$localport /cert:ignore +toggle-fullscreen /dynamic-resolution /sound:sys:alsa $fullscreen
 	else
 		# remmina does not like using files without a .remmina extension
 		tmpfile=$(mktemp --suffix=.remmina)
