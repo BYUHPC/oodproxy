@@ -1,4 +1,4 @@
-﻿// Final version of Program.cs with user-facing MessageBox error handling
+﻿﻿// Final version of Program.cs with user-facing MessageBox error handling
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -192,12 +192,12 @@ class Program
     static int StartStunnelProxy(Dictionary<string, string> config, (string CertPath, string KeyPath, string CAPath) certPaths)
     {
         int localPort = new Random().Next(49152, 65535);
-        Log($"Starting Stunnel proxy on 127.0.0.1:{localPort}...");
+        Log($"Starting Stunnel proxy on 127.12.25.37:{localPort}...");
 
         string conf = $@"
 [proxy]
 client = yes
-accept = 127.0.0.1:{localPort}
+accept = 127.12.25.37:{localPort}
 connect = {config["REMOTE_PROXY"]}
 cert = {certPaths.CertPath}
 key = {certPaths.KeyPath}
@@ -249,12 +249,12 @@ options = NO_TLSv1
 
     static void SetRdpCredentials(Dictionary<string, string> config)
     {
-        credentialTarget = "TERMSRV/127.0.0.1";
+        credentialTarget = "TERMSRV/127.12.25.37";
         Log("Setting RDP credentials using cmdkey...");
         Process.Start(new ProcessStartInfo
         {
             FileName = "cmdkey",
-            Arguments = $"/add:{credentialTarget} /user:{config["USERNAME"]} /pass:{config["PASSWORD"]}",
+            Arguments = $"/add:{credentialTarget} /user:127.12.25.37\\{config["USERNAME"]} /pass:{config["PASSWORD"]}",
             UseShellExecute = false,
             CreateNoWindow = true
         })?.WaitForExit();
@@ -264,9 +264,10 @@ options = NO_TLSv1
     {
         string fullscreen = (config.ContainsKey("FULLSCREEN") && config["FULLSCREEN"].Equals("true", StringComparison.OrdinalIgnoreCase)) ? "2" : "1";
 
-        string rdpContent = $@"full address:s:127.0.0.1:{localPort}
-username:s:{config["USERNAME"]}
-authentication level:i:0
+        string rdpContent = $@"full address:s:127.12.25.37:{localPort}
+username:s:127.12.25.37\\{config["USERNAME"]}
+authentication level:i:2
+enablecredsspsupport:i:1
 prompt for credentials:i:0
 screen mode id:i:{fullscreen}
 ";
@@ -322,7 +323,7 @@ screen mode id:i:{fullscreen}
             Log("VNC fullscreen mode enabled");
         }
 
-        args.Add($"127.0.0.1::{localPort}");
+        args.Add($"127.12.25.37::{localPort}");
 
         Log($"Launching TurboVNC: {javaExePath} {string.Join(" ", args)}");
 
@@ -359,7 +360,7 @@ screen mode id:i:{fullscreen}
             string output = netstat.StandardOutput.ReadToEnd();
             netstat.WaitForExit();
 
-            if (output.Contains($"127.0.0.1:{port}"))
+            if (output.Contains($"127.12.25.37:{port}"))
             {
                 return true;
             }

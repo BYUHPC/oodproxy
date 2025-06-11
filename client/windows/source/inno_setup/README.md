@@ -1,4 +1,4 @@
-To build the Windows installer:
+To build the Windows ood_proxy_byu installer:
 
 Build the C# project.  The C# project should build in a folder such as <project folder>/bin/Release/net8.0-windows/win-x64/publish/.   See C# README for more iformation on building the C# project.
 

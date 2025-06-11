@@ -1,6 +1,6 @@
 ; Inno Setup Script for OOD Proxy BYU Client with dynamic scope selection
 #define MyAppName "OOD Proxy BYU Client"
-#define MyAppVersion "1.1"
+#define MyAppVersion "1.3"
 #define MyAppPublisher "BYU"
 #define MyAppURL "https://rc.byu.edu"
 #define StunnelURL "https://www.stunnel.org/downloads.html"
@@ -60,6 +60,20 @@ begin
     Result := 'HKCU';
 end;
 
+function IsDomainJoined(): Boolean;
+begin
+  Result := CompareText(GetEnv('USERDOMAIN'), GetEnv('COMPUTERNAME')) <> 0;
+end;
+
+function HasPolicyKeys(): Boolean;
+begin
+  Result :=
+    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentials') and
+    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentialsWhenNTLMOnly') and
+    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentials', '1') and
+    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentialsWhenNTLMOnly', '1');
+end;
+
 function IsPerMachineInstall(): Boolean;
 begin
   Result := IsPerMachine;
@@ -107,7 +121,7 @@ begin
   begin
     IsPerMachine := (InstallScopePage.SelectedValueIndex = 0);
 
-    if IsPerMachine and not IsAdminLoggedOn then
+    if IsPerMachine and not IsAdminInstallMode then
     begin
       MsgBox('Administrative privileges are required to install for all users. Please restart this installer as administrator.', mbError, MB_OK);
       Result := False;
@@ -143,9 +157,20 @@ var
   ErrorCode: Integer;
 begin
   // Set a default guess before wizard UI runs
-  IsPerMachine := IsAdminLoggedOn;
+  IsPerMachine := IsAdminInstallMode;
   Result := True;
 
+  if IsDomainJoined() and not HasPolicyKeys() then
+begin
+  MsgBox(
+    'This machine is joined to a domain, but the required RDP policy has not been configured.'#13#10 +
+    'Please run the "OOD Proxy Policy Installer" as Administrator before proceeding.'#13#10 +
+    'See https://github.com/BYUHPC/oodproxy/wiki/Install-oodproxybyu-client-software for more information."',
+    mbCriticalError, MB_OK);
+  Result := False;
+  Exit;
+end;
+  
   if not IsStunnelInstalled() then
   begin
     if MsgBox(
