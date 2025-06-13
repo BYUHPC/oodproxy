@@ -8,9 +8,6 @@ This Windows Client provides a secure connection tunnel for Remote Desktop Proto
 ### `ood_proxy_byu_setup.exe`
 The Windows installer for end users. This installs the client application and sets up file associations for `.oodproxybyu` files. Distribute this file to users who need to connect to systems through Open OnDemand. The installer supports installing for individual users that do not have admin rights on their Windows machines, and for admins to install the software for all users on a machine.  The files in the source directory are the source code used to create the Windows installer.  This installer should work for any institution.  It functions entirely off of the downloaded config files.  They only thing specific to BYU with this installer and software is the name.  See the README file in the source directory for more information on how to build the executable and installer.
 
-### 'ood_proxy_policy_installer.exe'
-This policy installer is needed for Windows clients that are a member of a domain.  See https://github.com/BYUHPC/oodproxy/wiki/Install-oodproxybyu-client-software for more information.
-
 ## Prerequisites
 - Windows 10 or later
 - Stunnel for Windows https://www.stunnel.org/downloads.html

@@ -1,6 +1,7 @@
-; Inno Setup Script for OOD Proxy BYU Client with dynamic scope selection
+; Simplified Inno Setup Script for OOD Proxy BYU Client (System-Wide Only)
+
 #define MyAppName "OOD Proxy BYU Client"
-#define MyAppVersion "1.3"
+#define MyAppVersion "1.5"
 #define MyAppPublisher "BYU"
 #define MyAppURL "https://rc.byu.edu"
 #define StunnelURL "https://www.stunnel.org/downloads.html"
@@ -12,9 +13,9 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
+DefaultDirName={autopf}\OOD Proxy BYU
 DisableDirPage=yes
-DefaultDirName={code:GetInstallDir}
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 OutputDir=userdocs:Inno Setup Output
 OutputBaseFilename=ood_proxy_byu_setup
 DisableProgramGroupPage=yes
@@ -30,178 +31,122 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "contents\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{localappdata}\OOD Proxy BYU"
-Type: dirifempty; Name: "{localappdata}\OOD Proxy BYU"
+Type: filesandordirs; Name: "{app}"
 
 [Registry]
-; Per-user registry entries
-Root: HKCU; Check: IsPerUserInstall; Subkey: "SOFTWARE\Classes\.oodproxybyu"; ValueType: string; ValueData: "OODProxyBYU.Config"; Flags: uninsdeletekey
-Root: HKCU; Check: IsPerUserInstall; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config"; ValueType: string; ValueData: "OOD Proxy BYU Config File"; Flags: uninsdeletekey
-Root: HKCU; Check: IsPerUserInstall; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config\DefaultIcon"; ValueType: string; ValueData: """{app}\remote_access_icon.ico"""; Flags: uninsdeletekey
-Root: HKCU; Check: IsPerUserInstall; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config\shell\open\command"; ValueType: string; ValueData: """{app}\ood_proxy_win_client.exe"" ""%1"""; Flags: uninsdeletekey
-
-; All-users registry entries
-Root: HKLM; Check: IsPerMachineInstall; Subkey: "SOFTWARE\Classes\.oodproxybyu"; ValueType: string; ValueData: "OODProxyBYU.Config"; Flags: uninsdeletekey
-Root: HKLM; Check: IsPerMachineInstall; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config"; ValueType: string; ValueData: "OOD Proxy BYU Config File"; Flags: uninsdeletekey
-Root: HKLM; Check: IsPerMachineInstall; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config\DefaultIcon"; ValueType: string; ValueData: """{app}\remote_access_icon.ico"""; Flags: uninsdeletekey
-Root: HKLM; Check: IsPerMachineInstall; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config\shell\open\command"; ValueType: string; ValueData: """{app}\ood_proxy_win_client.exe"" ""%1"""; Flags: uninsdeletekey
-
+Root: HKLM; Subkey: "SOFTWARE\Classes\.oodproxybyu"; ValueType: string; ValueData: "OODProxyBYU.Config"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config"; ValueType: string; ValueData: "OOD Proxy BYU Config File"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config\DefaultIcon"; ValueType: string; ValueData: """{app}\remote_access_icon.ico"""; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\OODProxyBYU.Config\shell\open\command"; ValueType: string; ValueData: """{app}\ood_proxy_win_client.exe"" ""%1"""; Flags: uninsdeletekey
 
 [Code]
-var
-  InstallScopePage: TInputOptionWizardPage;
-  IsPerMachine: Boolean;
-    
-function GetRegistryRoot(Default: string): string;
-begin
-  if IsPerMachine then
-    Result := 'HKLM'
-  else
-    Result := 'HKCU';
-end;
-
 function IsDomainJoined(): Boolean;
 begin
   Result := CompareText(GetEnv('USERDOMAIN'), GetEnv('COMPUTERNAME')) <> 0;
 end;
 
-function HasPolicyKeys(): Boolean;
-begin
-  Result :=
-    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentials') and
-    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentialsWhenNTLMOnly') and
-    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentials', '1') and
-    RegValueExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentialsWhenNTLMOnly', '1');
-end;
-
-function IsPerMachineInstall(): Boolean;
-begin
-  Result := IsPerMachine;
-end;
-
-function IsPerUserInstall(): Boolean;
-begin
-  Result := not IsPerMachine;
-end;
-
-function GetInstallDir(Default: string): string;
-begin
-  // Called at setup load time; use a fallback guess here
-  if IsPerMachine then
-    Result := ExpandConstant('{pf}\OOD Proxy BYU')
-  else
-    Result := ExpandConstant('{localappdata}\OOD Proxy BYU');
-end;
-
-procedure InitializeWizard;
-begin
-  InstallScopePage := CreateInputOptionPage(
-    wpWelcome,
-    'Install Scope',
-    'Choose who should be able to use this software:',
-    'Select exactly one option below:',
-    True,  // <-- Exclusive = True (radio button behavior)
-    False  // Don't allow "Back" to be skipped
-  );
-  InstallScopePage.Add('All users (requires admin)');
-  InstallScopePage.Add('Just me (no admin required)');
-  InstallScopePage.SelectedValueIndex := 1; // default to "Just me"
-end;
-
-procedure UpdateInstallDir;
-begin
-  WizardForm.DirEdit.Text := GetInstallDir('');
-end;
-
-function NextButtonClick(CurPageID: Integer): Boolean;
-begin
-  Result := True;
-
-  if CurPageID = InstallScopePage.ID then
-  begin
-    IsPerMachine := (InstallScopePage.SelectedValueIndex = 0);
-
-    if IsPerMachine and not IsAdminInstallMode then
-    begin
-      MsgBox('Administrative privileges are required to install for all users. Please restart this installer as administrator.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-
-    // 👇 This updates the directory textbox to reflect the selected scope
-    UpdateInstallDir;
-
-    if IsPerMachine then
-      Log('Install scope selected: All users; Target dir: ' + GetInstallDir(''))
-    else
-      Log('Install scope selected: Just me; Target dir: ' + GetInstallDir(''));
-  end;
-end;
-
 function IsStunnelInstalled(): Boolean;
 begin
-  Result := FileExists(ExpandConstant('{pf32}\stunnel\bin\stunnel.exe')) or
-            FileExists(ExpandConstant('{pf}\stunnel\bin\stunnel.exe')) or
-            FileExists(ExpandConstant('{localappdata}\Programs\stunnel\bin\stunnel.exe')) or
-            FileExists(ExpandConstant('{localappdata}\stunnel\bin\stunnel.exe'));
+  Result :=
+    FileExists(ExpandConstant('{autopf}\stunnel\bin\stunnel.exe')) or
+    FileExists(ExpandConstant('{pf32}\stunnel\bin\stunnel.exe'));
 end;
 
 function IsTurboVNCInstalled(): Boolean;
 begin
-  Result := FileExists(ExpandConstant('{pf}\TurboVNC\java\VncViewer.jar')) or
-            FileExists(ExpandConstant('{localappdata}\TurboVNC\java\VncViewer.jar'));
+  Result :=
+    FileExists(ExpandConstant('{autopf}\TurboVNC\java\VncViewer.jar')) or
+    FileExists(ExpandConstant('{pf32}\TurboVNC\java\VncViewer.jar'));
+end;
+
+procedure CreateRDPPolicyKeys();
+begin
+  // RDP policy base keys
+  RegWriteDWordValue(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentials', 1);
+  RegWriteDWordValue(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentialsWhenNTLMOnly', 1);
+  // Add list entries
+  RegWriteStringValue(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentials', '1', 'TERMSRV/127.12.25.37');
+  RegWriteStringValue(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentialsWhenNTLMOnly', '1', 'TERMSRV/127.12.25.37');
 end;
 
 function InitializeSetup(): Boolean;
-var
-  ErrorCode: Integer;
 begin
-  // Set a default guess before wizard UI runs
-  IsPerMachine := IsAdminInstallMode;
-  Result := True;
-
-  if IsDomainJoined() and not HasPolicyKeys() then
-begin
-  MsgBox(
-    'This machine is joined to a domain, but the required RDP policy has not been configured.'#13#10 +
-    'Please run the "OOD Proxy Policy Installer" as Administrator before proceeding.'#13#10 +
-    'See https://github.com/BYUHPC/oodproxy/wiki/Install-oodproxybyu-client-software for more information."',
-    mbCriticalError, MB_OK);
-  Result := False;
-  Exit;
-end;
-  
   if not IsStunnelInstalled() then
   begin
-    if MsgBox(
-         'Stunnel is required but was not found.'#13#10#13#10 +
-         'Would you like to open the Stunnel download page?',
-         mbConfirmation, MB_YESNO) = IDYES then
-    begin
-      ShellExec('open', '{#StunnelURL}', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
-    end;
-
     MsgBox(
-      'Please install Stunnel before using this application.'#13#10 +
-      'The installer will continue, but the app may not function without it.',
-      mbInformation, MB_OK);
+      'Stunnel was not found on this system. The installer looked in the following locations:'#13#10 +
+      '  - C:\Program Files\stunnel\bin\stunnel.exe'#13#10 +
+      '  - C:\Program Files (x86)\stunnel\bin\stunnel.exe'#13#10#13#10 +
+      'Please install Stunnel AS ADMINISTRATOR for all users before running this installer.'#13#10 +
+      'You can download it from:'#13#10 + '{#StunnelURL}',
+      mbCriticalError, MB_OK);
+    Result := False;
+    Exit;
   end;
 
   if not IsTurboVNCInstalled() then
   begin
     MsgBox(
-      'TurboVNC was not found.'#13#10#13#10 +
-      'VNC connections will not work until it is installed.'#13#10 +
+      'TurboVNC was not found in Program Files. VNC functionality will not work until it is installed.'#13#10 +
       'You can download it from:'#13#10 + '{#TurboVNCURL}',
       mbInformation, MB_OK);
   end;
+
+  if IsDomainJoined() then
+  begin
+    CreateRDPPolicyKeys();
+  end;
+
+  Result := True;
+end;
+
+function IsKeyEmpty(SubKey: string): Boolean;
+var
+  I: Integer;
+  ValueData: string;
+begin
+  Result := True;
+  for I := 1 to 50 do
+  begin
+    if RegQueryStringValue(HKLM, SubKey, IntToStr(I), ValueData) then
+    begin
+      Result := False;
+      break;
+    end;
+  end;
+end;
+
+procedure RemoveRdpEntryAndMaybeDeleteKey(SubKey: string);
+var
+  I: Integer;
+  ValueName, ValueData: string;
+begin
+  for I := 1 to 50 do
+  begin
+    ValueName := IntToStr(I);
+    if RegQueryStringValue(HKLM, SubKey, ValueName, ValueData) then
+    begin
+      if ValueData = 'TERMSRV/127.12.25.37' then
+        RegDeleteValue(HKLM, SubKey, ValueName);
+    end;
+  end;
+
+  if IsKeyEmpty(SubKey) then
+    RegDeleteKeyIncludingSubkeys(HKLM, SubKey);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'SOFTWARE\Classes\.oodproxybyu');
-    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'SOFTWARE\Classes\OODProxyBYU.Config');
+    RemoveRdpEntryAndMaybeDeleteKey('SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentials');
+    RemoveRdpEntryAndMaybeDeleteKey('SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentialsWhenNTLMOnly');
+
+    // Delete parent policy DWORDs if no subkeys remain
+    if not RegKeyExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentials') then
+      RegDeleteValue(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentials');
+
+    if not RegKeyExists(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowSavedCredentialsWhenNTLMOnly') then
+      RegDeleteValue(HKLM, 'SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation', 'AllowSavedCredentialsWhenNTLMOnly');
   end;
 end;
